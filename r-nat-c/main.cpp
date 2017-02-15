@@ -16,13 +16,13 @@ public:
 
 		ioservice_works_.push_back(std::make_shared<asio::io_service::work>(main_ioservice_));
 
-		std::size_t pool_size = std::thread::hardware_concurrency();
-		for (std::size_t i = 0; i < pool_size; i++)
-		{
-			auto ioservice = std::make_shared<asio::io_service>();
-			ioservices_.push_back(ioservice);
-			ioservice_works_.push_back(std::make_shared<asio::io_service::work>(*ioservice));
-		}
+// 		std::size_t pool_size = std::thread::hardware_concurrency();
+// 		for (std::size_t i = 0; i < pool_size; i++)
+// 		{
+// 			auto ioservice = std::make_shared<asio::io_service>();
+// 			ioservices_.push_back(ioservice);
+// 			ioservice_works_.push_back(std::make_shared<asio::io_service::work>(*ioservice));
+// 		}
 
 		try
 		{

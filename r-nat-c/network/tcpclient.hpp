@@ -34,26 +34,6 @@ public:
 
 	auto Start(asio::ip::tcp::endpoint ep) -> void
 	{
-		// this is needed for some anti-ddos
-#if 0
-		socket_->open(ep.protocol());
-		{
-			static uint16_t start_port =[] () -> uint16_t
-			{
-				srand(time(0));
-				return rand()%2000 + 1024;
-			}();
-			asio::error_code bind_ec;
-			do
-			{
-				bind_ec = asio::error_code();
-				asio::ip::tcp::endpoint bind_ep(asio::ip::address_v4::any(), start_port);
-				socket_->bind(bind_ep, bind_ec);
-
-				start_port++;
-			} while (bind_ec);
-		}
-#endif
 		sending_pkt_ = std::make_shared<asio::streambuf>();
 		
 		// create timer first because async_connect may happen quickly

@@ -2,7 +2,7 @@
 <config>
   <!-- support multi listen address-->
   <local>
-    <node address="0.0.0.0" port="4111"/>
+    <node address="0.0.0.0" port="443"/>
   </local>
   <!-- 
   	support multi address, can be either domain or ip
@@ -13,5 +13,5 @@
 <!--
 set recv_buf carefully, the memory usage = users * recv_buf
 -->
-<packet max="11264000" recv_buf_size="4096"/>
+<packet max="112640" recv_buf_size="65536"/>
 </config>

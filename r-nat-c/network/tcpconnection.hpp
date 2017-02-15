@@ -136,7 +136,7 @@ protected:
 		buf_header->commit(sizeof(uint32_t));
 		outgoing_queue_.push_back(std::make_pair(buf_header, std::function<void(void)>()));
 
-		LOG_DEBUG("sending %d",data->size());
+//		LOG_DEBUG("sending %d",data->size());
 		// push the real data
 		outgoing_queue_.push_back(std::make_pair(data, pfn));
 		__DoSend();
@@ -155,7 +155,7 @@ protected:
 		buf_header->commit(sizeof(uint32_t));
 		outgoing_queue_.push_back(std::make_pair(buf_header, std::function<void(void)>()));
 
-		LOG_DEBUG("sending %d", l);
+//		LOG_DEBUG("sending %d", l);
 		// push the real data
 		for (size_t i=0, count = datas.size();i<count;i++)
 		{
@@ -243,7 +243,7 @@ protected:
 			// has been freed at this point
 			return;
 		}
-		LOG_DEBUG("recving %d", packet_length);
+//		LOG_DEBUG("recving %d", packet_length);
 
 		asio::async_read(*socket_, recving_pkt_->prepare(packet_length),
 			std::bind(&TCPConnection<SocketType>::__OnRecvCallback, this->shared_from_this(),
