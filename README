@@ -27,7 +27,8 @@ when a user connects to 1.1.1.1:8018, r-nat-s notifies r-nat-c someone connected
 r-nat-c creates a connection to 127.0.0.1:4018. The connection is established. 
 Whenver the user or the local service sends data, r-nat will relay to the opposite.
 
-It is built with asio,rapidxml, has been tested in ubuntu 16.04 lts, windows 7/8.1/10.
+It is built with asio,rapidxml, has been tested in ubuntu 16.04 lts, windows 7/8.1/10, 
+debian 8(raspberry pi 3, orange pi zero)
 
 TODO:
 1. agent for host B so that we can avoid to expose more port in host S.
