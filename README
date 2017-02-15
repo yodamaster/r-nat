@@ -1,0 +1,33 @@
+R-NAT (a high performance reverse NAT tool)
+
+r-nat is created to allow services inside a private network be accessed from 
+internet. By changing the client connection address, no other change is required.
+
+Let me introduce how it works:
+Host A: it can be a remote debugger, RDP service, FTP, or anything else(so far 
+only TCP support is added), it listens at 0.0.0.0:4018. it is in somewhere in
+this planet, inside a private network, can be one or more layers before it can 
+reach internet. 
+Host B: anyone wants to connect to above service, also inside a private network.
+
+before r-nat was made, we may have to use vpn to connect them together, however,
+it is sometimes not an option, say, no administrator right, or either of them may
+ have been using openvpn.
+
+after we have r-nat, it become very simple.
+Host S with public ip: run r-nat-s, suppose the ip is: 1.1.1.1, it listens at
+443. (443 is recommended)
+Host A: run r-nat-c. it connects to 1.1.1.1:443, and according config file
+registers a port 8018 in host S which will be routed to 127.0.0.1:4018, r-nat-s 
+adds one more listen at 8018.
+Host B: now can open VisualStudio as usual, type 1.1.1.1:8018, and start debugging 
+program running on host A.
+
+when a user connects to 1.1.1.1:8018, r-nat-s notifies r-nat-c someone connected,
+r-nat-c creates a connection to 127.0.0.1:4018. The connection is established. 
+Whenver the user or the local service sends data, r-nat will relay to the opposite.
+
+It is built with asio,rapidxml, has been tested in ubuntu 16.04 lts, windows 7/8.1/10.
+
+TODO:
+1. agent for host B so that we can avoid to expose more port in host S.

@@ -1,0 +1,7 @@
+__pycache__/
+workspace/
+Debug/
+Release/
+*.pyc
+*.opensdf
+*.sdf

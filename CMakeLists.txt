@@ -1,0 +1,15 @@
+cmake_minimum_required(VERSION 3.0)
+
+set (CMAKE_CXX_STANDARD 11)
+
+include_directories(${CMAKE_BINARY_DIR}/deps)
+
+set(CMAKE_MODULE_PATH ${CMAKE_CURRENT_LIST_DIR}/deps)
+INCLUDE_DIRECTORIES("${CMAKE_CURRENT_LIST_DIR}/deps")
+INCLUDE_DIRECTORIES("${CMAKE_CURRENT_LIST_DIR}/deps/rapidxml/include")
+INCLUDE_DIRECTORIES("${CMAKE_CURRENT_LIST_DIR}/deps/asio/1.10.6/include")
+
+INCLUDE(cotire)
+
+ADD_SUBDIRECTORY("r-nat-s" "${CMAKE_BINARY_DIR}/r-nat-s")
+ADD_SUBDIRECTORY("r-nat-c" "${CMAKE_BINARY_DIR}/r-nat-c")

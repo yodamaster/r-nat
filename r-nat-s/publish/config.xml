@@ -1,0 +1,17 @@
+<?xml version="1.0"?>
+<config>
+  <!-- support multi listen address-->
+  <local>
+    <node address="0.0.0.0" port="4111"/>
+  </local>
+  <!-- 
+  	support multi address, can be either domain or ip
+  	loadpolicy can be ip or seq, default is ip
+  -->
+  <remote loadpolicy="ip">
+  </remote>
+<!--
+set recv_buf carefully, the memory usage = users * recv_buf
+-->
+<packet max="11264000" recv_buf_size="4096"/>
+</config>

@@ -1,0 +1,11 @@
+Windows:
+1. ensure you have cmake, can modify build.bat to include cmake into environment variable 'path'
+2. open VS2013 or above command promit
+3. type "build.bat"
+4. you can find the binary in /workspace/bin
+
+Linux:
+1. apt install cmake build-essential
+2. chmod +x ./build.sh
+3. type "./build.sh"
+4. you can find the binary in /workspace/bin

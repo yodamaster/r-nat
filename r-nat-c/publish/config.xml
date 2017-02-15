@@ -1,0 +1,32 @@
+<?xml version="1.0"?>
+<config>
+  <!-- 
+	  support multi service address, can be either domain or ip
+	  address:port is where the service actually listens, it is ok in another server, as long as can be reached from this server instance
+	  service_port is the port our r-nat-s listens at, change the port if a port is used by other r-nat-c
+  -->
+  <service>
+    <node address="127.0.0.1" port="80" service_port="10080"/>
+    <node address="127.0.0.1" port="8080" service_port="18080"/>
+    <node address="127.0.0.1" port="21" service_port="10021"/>
+    <node address="127.0.0.1" port="4018" service_port="14018"/>
+    <node address="127.0.0.1" port="4019" service_port="14019"/>
+    <node address="127.0.0.1" port="3389" service_port="13389"/>
+    <node address="127.0.0.1" port="1025" service_port="11025"/>
+    <node address="127.0.0.1" port="5900" service_port="15900"/>
+   </service>
+ 
+  <remote concurrency="2">
+  <!-- 
+	  support multi address, can be either domain or ip
+	  here are all r-nat-s addresses, final user can reach service at these addresses: service_port
+  -->
+    <node address="1.1.1.1" port="8111"/>
+    <node address="1.1.1.2" port="8222"/>
+    <node address="1.1.1.3" port="8333"/>
+  </remote>
+<!--
+set recv_buf carefully, the memory usage = users * recv_buf
+-->
+<packet max="11264000" recv_buf_size="4096"/>
+</config>
