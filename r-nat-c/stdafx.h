@@ -14,8 +14,14 @@
 #include <stdint.h>
 #ifdef WIN32
 #include <io.h>
+#include <tchar.h>
 #else
 #include <unistd.h>
+#endif
+
+#ifndef WIN32
+#define _stricmp strcasecmp
+#define _strnicmp strncasecmp
 #endif
 
 #include <functional>
@@ -29,7 +35,11 @@ using namespace std::placeholders;
 #include <asio.hpp>
 #include <asio/steady_timer.hpp>
 
+#ifdef WIN32
+typedef std::wstring path_t;
+#else
 typedef std::string path_t;
+#endif
 
 #include <common/singleton.h>
 #include <liblogger/liblogger.h>
@@ -38,8 +48,6 @@ typedef std::string path_t;
 #include <common/xmlserializer.h>
 
 #include <protocol.h>
-
-#define QUEUE_LIMIT 10
 
 
 inline unsigned int fnv_hash_int(int v)

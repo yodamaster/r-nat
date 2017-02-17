@@ -74,7 +74,7 @@ void AppLogic1::__OnAgentRecv(uint32_t seq, std::shared_ptr<asio::streambuf> dat
 
 		auto send_ack = [&](uint16_t port, uint32_t error_code)
 		{
-			auto rep_buf = std::make_shared<asio::streambuf>();
+			auto rep_buf = __CreateIoBuffer();
 			auto rep = (R_NAT::R2A::bind*)asio::buffer_cast<char*>(rep_buf->prepare(sizeof(R_NAT::R2A::bind)));
 			rep->cmd = R_NAT::R2A::BIND;
 			rep->port = port;
@@ -91,19 +91,15 @@ void AppLogic1::__OnAgentRecv(uint32_t seq, std::shared_ptr<asio::streambuf> dat
 			// we need to add a service
 			auto service = std::make_shared<ServiceInfo>();
 			service->port_ = req->port;
-			service->service_tcpserver_ = std::make_shared<RawTcpServer>(server_->main_ioservice_);
-	//		service->service_tcpserver_->SetMaxPacketLength(getConfig()->packet_.size_max_);
-	//		service->service_tcpserver_->SetNoDelay(true);
-			service->service_tcpserver_->SetRecvbufSize(getConfig()->packet_.recv_buf_size_);
+			service->service_tcpserver_ = std::make_shared<RawTcpServer>(server_->main_ioservice_,server_->ioservices_);
+			service->service_tcpserver_->SetMaxPacketLength(getConfig()->system_.max_packet_size_);
+			service->service_tcpserver_->SetNoDelay(getConfig()->system_.tcp_send_no_delay_);
+			service->service_tcpserver_->SetRecvbufSize(getConfig()->system_.recv_buf_size_);
+			service->service_tcpserver_->on_recv = strand_.wrap(std::bind(&AppLogic1::__OnUserRecv, this, service, _1, _2));
+			service->service_tcpserver_->on_connect = strand_.wrap(std::bind(&AppLogic1::__OnUserConnect, this, service, _1, _2));
+			service->service_tcpserver_->on_disconnect = strand_.wrap(std::bind(&AppLogic1::__OnUserDisconnect, this, service, _1, _2));
 
 			service->agents_.insert(seq);
-
-			service->service_tcpserver_->on_recv = std::bind(&AppLogic1::__OnUserRecv, this, service, _1, _2);
-			service->service_tcpserver_->on_connect = std::bind(&AppLogic1::__OnUserConnect, this, service, _1, _2);
-			service->service_tcpserver_->on_disconnect = std::bind(&AppLogic1::__OnUserDisconnect, this, service, _1, _2);
-			service->service_tcpserver_->SetMaxPacketLength(getConfig()->packet_.size_max_);
-//			service->service_tcpserver_->SetNoDelay(true);
-
 			if (service->service_tcpserver_->Start(asio::ip::tcp::endpoint(asio::ip::address_v4::any(), req->port)))
 			{
 				LOG_DEBUG("started listening at %d", req->port);
@@ -146,7 +142,7 @@ void AppLogic1::__OnAgentRecv(uint32_t seq, std::shared_ptr<asio::streambuf> dat
 
 		auto send_ack = [&](uint16_t port, uint32_t error_code)
 		{
-			auto rep_buf = std::make_shared<asio::streambuf>();
+			auto rep_buf = __CreateIoBuffer();
 			using MSG = R_NAT::R2A::unbind;
 			auto rep = (MSG*)asio::buffer_cast<char*>(rep_buf->prepare(sizeof(MSG)));
 			rep->cmd = R_NAT::R2A::UNBIND;
@@ -212,9 +208,10 @@ void AppLogic1::__OnAgentRecv(uint32_t seq, std::shared_ptr<asio::streambuf> dat
 			LOG_DEBUG("relay traffic from agent %d to service %d, user %d", seq, req->port, user_id);
 
 			session->tunnel_traffic_++;
-			if (QUEUE_LIMIT &&
+			auto queue_limit = queue_limit_;
+			if (queue_limit &&
 				(!session->tunnel_corked_) &&
-				session->tunnel_traffic_ > QUEUE_LIMIT)
+				session->tunnel_traffic_ > queue_limit)
 			{
 				// we have receive too many from relay
 				session->tunnel_corked_ = true;
@@ -222,11 +219,11 @@ void AppLogic1::__OnAgentRecv(uint32_t seq, std::shared_ptr<asio::streambuf> dat
 				LOG_DEBUG("stop recv from agent %d due to longer queue size", seq, session->tunnel_traffic_);
 			}
 
-			service->service_tcpserver_->Send(user_id, data, [this, session, seq]{
+			service->service_tcpserver_->Send(user_id, data, [this, session, seq, queue_limit]{
 				session->tunnel_traffic_--;
-				if (QUEUE_LIMIT &&
+				if (queue_limit &&
 					(session->tunnel_corked_) &&
-					session->tunnel_traffic_ <= QUEUE_LIMIT / 2)
+					session->tunnel_traffic_ <= queue_limit / 2)
 				{
 					session->tunnel_corked_ = false;
 					agent_tcpserver_->BlockRecv(seq, false);

@@ -35,6 +35,7 @@ protected:
 	bool blocking_recv_{ false };
 
 public:
+	std::function<std::shared_ptr<asio::streambuf>(void)> on_allocbuf;
 	std::function<void(const asio::error_code& e)> on_disconnect;
 	std::function<void(std::shared_ptr<asio::streambuf> /*buf*/)> on_recv;
 
@@ -59,9 +60,9 @@ public:
 	{
 		io_service_.post(std::bind(&TCPConnection<SocketType>::__Send, this->shared_from_this(), data, pfn));
 	}
-	auto SendV(std::vector<std::shared_ptr<asio::streambuf>> datas, std::function<void(void)> pfn = nullptr) -> void
+	auto SendV(std::shared_ptr<std::vector<std::shared_ptr<asio::streambuf>>> data, std::function<void(void)> pfn = nullptr) -> void
 	{
-		io_service_.post(std::bind(&TCPConnection<SocketType>::__SendV, this->shared_from_this(), datas, pfn));
+		io_service_.post(std::bind(&TCPConnection<SocketType>::__SendV, this->shared_from_this(), data, pfn));
 	}
 
 	auto Close() -> void
@@ -131,38 +132,36 @@ protected:
 	auto __Send(std::shared_ptr<asio::streambuf> data, std::function<void(void)> pfn) -> void
 	{
 		// fill the packet length
-		auto buf_header = std::make_shared<asio::streambuf>();
+		auto buf_header = on_allocbuf();
 		*(asio::buffer_cast<uint32_t*>(buf_header->prepare(PACKET_HEADER_LENGTH))) = (uint32_t)data->size();
 		buf_header->commit(sizeof(uint32_t));
 		outgoing_queue_.push_back(std::make_pair(buf_header, std::function<void(void)>()));
 
-//		LOG_DEBUG("sending %d",data->size());
 		// push the real data
 		outgoing_queue_.push_back(std::make_pair(data, pfn));
 		__DoSend();
 	}
 
-	auto __SendV(std::vector<std::shared_ptr<asio::streambuf>> datas, std::function<void(void)> pfn) -> void
+	auto __SendV(std::shared_ptr<std::vector<std::shared_ptr<asio::streambuf>>> datas, std::function<void(void)> pfn) -> void
 	{
 		size_t l = 0;
-		for (auto&& data: datas)
+		for (auto&& data: *datas)
 		{
 			l += data->size();
 		}
 		// fill the packet length
-		auto buf_header = std::make_shared<asio::streambuf>();
+		auto buf_header = on_allocbuf();
 		*(asio::buffer_cast<uint32_t*>(buf_header->prepare(PACKET_HEADER_LENGTH))) = (uint32_t)l;
 		buf_header->commit(sizeof(uint32_t));
 		outgoing_queue_.push_back(std::make_pair(buf_header, std::function<void(void)>()));
 
-//		LOG_DEBUG("sending %d", l);
 		// push the real data
-		for (size_t i=0, count = datas.size();i<count;i++)
+		for (size_t i=0, count = datas->size();i<count;i++)
 		{
 			if (i + 1 == count)
-				outgoing_queue_.push_back(std::make_pair(datas[i], pfn));
+				outgoing_queue_.push_back(std::make_pair(datas->at(i), pfn));
 			else
-				outgoing_queue_.push_back(std::make_pair(datas[i], std::function<void(void)>()));
+				outgoing_queue_.push_back(std::make_pair(datas->at(i), std::function<void(void)>()));
 		}
 		__DoSend();
 	}
@@ -220,7 +219,7 @@ protected:
 		if (blocking_recv_)
 			return;
 
-		recving_pkt_ = std::make_shared<asio::streambuf>();
+		recving_pkt_ = on_allocbuf();
 
 		asio::async_read(*socket_, asio::buffer(packet_header_, PACKET_HEADER_LENGTH),
 			std::bind(&TCPConnection<SocketType>::__OnHeadRecvCallback, this->shared_from_this(),
@@ -243,7 +242,6 @@ protected:
 			// has been freed at this point
 			return;
 		}
-//		LOG_DEBUG("recving %d", packet_length);
 
 		asio::async_read(*socket_, recving_pkt_->prepare(packet_length),
 			std::bind(&TCPConnection<SocketType>::__OnRecvCallback, this->shared_from_this(),

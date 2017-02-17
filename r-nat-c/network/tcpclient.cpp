@@ -14,6 +14,12 @@ TcpClient::~TcpClient()
 auto TcpClient::Start(asio::ip::tcp::endpoint ep) -> void
 {
 	impl_ = std::make_shared<ClientTCPConnection>(io_service_);
+	impl_->on_allocbuf = [this]
+	{
+		if (on_allocbuf)
+			return on_allocbuf();
+		return std::make_shared<asio::streambuf>();
+	};
 	impl_->on_connect = [this]
 	{
 		if (on_connect)

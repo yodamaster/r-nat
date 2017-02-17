@@ -35,12 +35,16 @@ class TcpServer
 	: public std::enable_shared_from_this<TcpServer>
 {
 public:
+	std::function<std::shared_ptr<asio::streambuf>(void)> on_allocbuf;
 	std::function<void(uint32_t /*seq*/, asio::ip::tcp::endpoint /*ep*/)> on_connect;
 	std::function<void(uint32_t /*seq*/, const asio::error_code&)> on_disconnect;
 	std::function<void(uint32_t /*seq*/, std::shared_ptr<asio::streambuf> /*buf*/)> on_recv;
 
 public:
-	TcpServer(asio::io_service& io_service) : io_service_(io_service){}
+	TcpServer(asio::io_service& io_service, std::vector<std::shared_ptr<asio::io_service>> ioservices)
+		: io_service_(io_service)
+		, strand_(io_service)
+		, ioservices_(ioservices){}
 	~TcpServer() = default;
 
 	auto SetMaxPacketLength(uint32_t l) -> void
@@ -71,25 +75,27 @@ public:
 	// data operation for individual connections
 	auto Send(uint32_t seq, std::shared_ptr<asio::streambuf> data, std::function<void(void)> pfn = nullptr) -> void
 	{
-		io_service_.post(std::bind(&TcpServer::__Send, this->shared_from_this(), seq, data, pfn));
+		strand_.post(std::bind(&TcpServer::__Send, this->shared_from_this(), seq, data, pfn));
 	}
-	auto SendV(uint32_t seq, std::vector<std::shared_ptr<asio::streambuf>> datas, std::function<void(void)> pfn = nullptr) -> void
+	auto SendV(uint32_t seq, std::shared_ptr<std::vector<std::shared_ptr<asio::streambuf>>> data, std::function<void(void)> pfn = nullptr) -> void
 	{
-		io_service_.post(std::bind(&TcpServer::__SendV, this->shared_from_this(), seq, datas, pfn));
+		strand_.post(std::bind(&TcpServer::__SendV, this->shared_from_this(), seq, data, pfn));
 	}
 	auto BlockRecv(uint32_t seq, bool b) -> void
 	{
-		io_service_.post(std::bind(&TcpServer::__BlockRecv, this->shared_from_this(), seq, b));
+		strand_.post(std::bind(&TcpServer::__BlockRecv, this->shared_from_this(), seq, b));
 	}
 	auto Close(uint32_t seq) -> void
 	{
-		io_service_.post(std::bind(&TcpServer::__Close, this->shared_from_this(), seq));
+		strand_.post(std::bind(&TcpServer::__Close, this->shared_from_this(), seq));
 	}
 
 protected:
 	bool inited_{ false };
 	uint32_t next_seq_{ 0 };
 	asio::io_service& io_service_;
+	asio::strand strand_;
+	std::vector<std::shared_ptr<asio::io_service>> ioservices_;
 	uint32_t max_packet_length_{ 0 }; // 0 means default
 	size_t recv_buf_length_{ 0 }; // 0 means default
 	bool nodelay_{ false };
@@ -105,7 +111,7 @@ protected:
 		std::shared_ptr<asio::ip::tcp::acceptor> acceptor, const asio::error_code& e) -> void;
 	auto __GetNextSeq() -> uint32_t;
 	auto __Send(uint32_t seq, std::shared_ptr<asio::streambuf> data, std::function<void(void)> pfn) -> void;
-	auto __SendV(uint32_t seq, std::vector<std::shared_ptr<asio::streambuf>> datas, std::function<void(void)> pfn) -> void;
+	auto __SendV(uint32_t seq, std::shared_ptr<std::vector<std::shared_ptr<asio::streambuf>>> data, std::function<void(void)> pfn) -> void;
 	auto __BlockRecv(uint32_t seq, bool b) -> void;
 	auto __Close(uint32_t seq) -> void;
 };

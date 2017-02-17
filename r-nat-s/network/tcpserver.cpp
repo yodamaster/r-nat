@@ -37,19 +37,25 @@ auto TcpServer::__StartNextConnection(std::shared_ptr<asio::ip::tcp::acceptor> a
 {
 	auto seq = __GetNextSeq();
 	// create connection & set callbacks
-	auto conn = std::make_shared<ServerTCPConnection>(io_service_);
+	auto conn = std::make_shared<ServerTCPConnection>(*ioservices_[seq % ioservices_.size()]);
 	conn->SetMaxPacketLength(max_packet_length_);
 	conn->SetNoDelay(nodelay_);
 	conn->SetRecvbufSize(recv_buf_length_);
-	conn->on_disconnect = [this, seq](const asio::error_code& e)
+	conn->on_allocbuf = [this]
+	{
+		if (on_allocbuf)
+			return on_allocbuf();
+		return std::make_shared<asio::streambuf>();
+	};
+	conn->on_disconnect = strand_.wrap([this, seq](const asio::error_code& e)
 	{
 		on_disconnect(seq,e); // notify a connection gone
 		conns_.erase(seq);
-	};
-	conn->on_recv = [this,seq](std::shared_ptr<asio::streambuf> buf)
+	});
+	conn->on_recv = strand_.wrap([this, seq](std::shared_ptr<asio::streambuf> buf)
 	{
 		on_recv(seq, buf);
-	};
+	});
 
 	conns_[seq] = conn;
 
@@ -128,12 +134,12 @@ auto TcpServer::__Send(uint32_t seq, std::shared_ptr<asio::streambuf> data, std:
 	}
 }
 
-auto TcpServer::__SendV(uint32_t seq, std::vector<std::shared_ptr<asio::streambuf>> datas, std::function<void(void)> pfn) -> void
+auto TcpServer::__SendV(uint32_t seq, std::shared_ptr<std::vector<std::shared_ptr<asio::streambuf>>> data, std::function<void(void)> pfn) -> void
 {
 	auto&& iter = conns_.find(seq);
 	if (iter != conns_.end())
 	{
-		iter->second->SendV(datas, pfn);
+		iter->second->SendV(data, pfn);
 	}
 }
 

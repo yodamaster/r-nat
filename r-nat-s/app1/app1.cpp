@@ -5,7 +5,9 @@
 
 #include "../config.h"
 
-AppLogic1::AppLogic1(Server* server):server_(server)
+AppLogic1::AppLogic1(Server* server)
+	: server_(server)
+	, strand_(server->main_ioservice_)
 {
 }
 
@@ -15,6 +17,9 @@ AppLogic1::~AppLogic1()
 
 bool AppLogic1::Init()
 {
+	load_policy_ = getConfig()->system_.LoadPolicy();
+	queue_limit_ = getConfig()->system_.queue_limit_;
+
 	asio::error_code ignored_ec;
 	asio::ip::tcp::resolver resolver(server_->main_ioservice_);
 
@@ -37,36 +42,28 @@ bool AppLogic1::Init()
 		}
 		if (listenep_.size()==0) return false;
 	}
-	
-	auto loadpolicy = getConfig()->remote_.loadpolicy_;
-	if (!stricmp(loadpolicy.c_str(),"IP"))
-	{
-		load_policy_ = POLICY_IP;
-	}
-	else if (!stricmp(loadpolicy.c_str(),"SEQ"))
-	{
-		load_policy_ = POLICY_SEQ;
-	}
-	std::cout << "LoadPolicy: " << load_policy_ << std::endl; 
 
 	return true;
 }
 
 void AppLogic1::Start()
 {
-	agent_tcpserver_ = std::make_shared<TcpServer>(server_->main_ioservice_);
-	agent_tcpserver_->SetMaxPacketLength(getConfig()->packet_.size_max_);
-//	tcpserver_->SetNoDelay(true);
-	agent_tcpserver_->SetRecvbufSize(getConfig()->packet_.recv_buf_size_);
-	agent_tcpserver_->on_recv = std::bind(&AppLogic1::__OnAgentRecv, this, _1, _2);
-	agent_tcpserver_->on_connect = std::bind(&AppLogic1::__OnAgentConnect, this, _1, _2);
-	agent_tcpserver_->on_disconnect = std::bind(&AppLogic1::__OnAgentDisconnect, this, _1, _2);
+	enable_buffer_pooling_ = true;
+	agent_tcpserver_ = std::make_shared<TcpServer>(server_->main_ioservice_,server_->ioservices_);
+	agent_tcpserver_->SetMaxPacketLength(getConfig()->system_.max_packet_size_);
+	agent_tcpserver_->SetNoDelay(getConfig()->system_.tcp_send_no_delay_);
+	agent_tcpserver_->SetRecvbufSize(getConfig()->system_.recv_buf_size_);
+	agent_tcpserver_->on_allocbuf = std::bind(&AppLogic1::__CreateIoBuffer,this);
+	agent_tcpserver_->on_recv = strand_.wrap(std::bind(&AppLogic1::__OnAgentRecv, this, _1, _2));
+	agent_tcpserver_->on_connect = strand_.wrap(std::bind(&AppLogic1::__OnAgentConnect, this, _1, _2));
+	agent_tcpserver_->on_disconnect = strand_.wrap(std::bind(&AppLogic1::__OnAgentDisconnect, this, _1, _2));
 
 	agent_tcpserver_->Start(listenep_);
 }
 
 void AppLogic1::Stop()
 {
+	enable_buffer_pooling_ = false;
 	agent_tcpserver_->Close();
 	for (auto&& service : services_)
 	{
@@ -74,4 +71,31 @@ void AppLogic1::Stop()
 	}
 	services_.clear();
 	agents_.clear();
+}
+
+auto AppLogic1::__CreateIoBuffer()->std::shared_ptr<asio::streambuf>
+{
+	std::lock_guard<decltype(buff_pool_lock_)> l(buff_pool_lock_);
+	asio::streambuf* p = nullptr;
+	if (buffer_pool_.size())
+	{
+		p = buffer_pool_.front();
+		buffer_pool_.pop_front();
+	}
+	else
+	{
+		p = new asio::streambuf;
+	}
+	return std::shared_ptr<asio::streambuf>(p, [this](asio::streambuf* p){
+		std::lock_guard<decltype(buff_pool_lock_)> l(buff_pool_lock_);
+		if (enable_buffer_pooling_)
+		{
+			p->consume(p->size());
+			buffer_pool_.push_back(p);
+		}
+		else
+		{
+			delete p;
+		}
+	});
 }

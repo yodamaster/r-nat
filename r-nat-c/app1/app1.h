@@ -6,12 +6,14 @@
 #include <set>
 #include <map>
 #include <atomic>
+#include <deque>
 
 class Server;
 
 class AppLogic1
 {
 	Server* server_;
+	asio::strand strand_;
 public:
 	AppLogic1(Server* server);
 	~AppLogic1();
@@ -21,8 +23,15 @@ public:
 	void Stop();
 
 protected:
+	// buffer pool
+	bool enable_buffer_pooling_{ true };
+	std::deque<asio::streambuf*> buffer_pool_;
+	std::mutex buff_pool_lock_;
+
 	// config
-	std::map<uint16_t,std::set<asio::ip::tcp::endpoint>> service_ep_;
+	uint32_t queue_limit_;
+	uint32_t load_policy_;
+	std::map<uint16_t, std::set<asio::ip::tcp::endpoint>> service_ep_;
 	std::vector<asio::ip::tcp::endpoint> remote_ep_;
 
 	using User = std::pair<uint16_t, uint32_t>;
@@ -47,7 +56,14 @@ protected:
 	};
 	typedef std::shared_ptr<RemoteInfo> RemoteInfo_ptr;
 	std::vector<RemoteInfo_ptr> relays_;
-	
+
+	auto __CreateTcpClient()->TcpClient_ptr;
+	auto __CreateRawTcpClient()->RawTcpClient_ptr;
+	auto __CreateTunnelConn(RemoteInfo_ptr remoteinfo)->TcpClient_ptr;
+	auto __CreateSessionTunnelConn(RemoteInfo_ptr remoteinfo, Session_ptr session, User usr)->TcpClient_ptr;
+	auto __CreateUserConn(RemoteInfo_ptr remoteinfo, Session_ptr session, User usr, const asio::ip::tcp::endpoint& service_ep)->RawTcpClient_ptr;
+	auto __CreateIoBuffer()->std::shared_ptr<asio::streambuf>;
+
 	// remote service(from agent to relay server)
 	void __OnServerConnect(RemoteInfo_ptr remoteinfo);
 	void __OnServerDisconnect(const asio::error_code& e,RemoteInfo_ptr remoteinfo);

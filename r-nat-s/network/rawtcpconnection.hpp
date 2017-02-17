@@ -33,6 +33,7 @@ protected:
 	bool blocking_recv_{ false };
 
 public:
+	std::function<std::shared_ptr<asio::streambuf>(void)> on_allocbuf;
 	std::function<void(const asio::error_code& e)> on_disconnect;
 	std::function<void(std::shared_ptr<asio::streambuf> /*buf*/)> on_recv;
 
@@ -57,9 +58,9 @@ public:
 	{
 		io_service_.post(std::bind(&RawTCPConnection<SocketType>::__Send, this->shared_from_this(), data, pfn));
 	}
-	auto SendV(std::vector<std::shared_ptr<asio::streambuf>> datas, std::function<void(void)> pfn = nullptr) -> void
+	auto SendV(std::shared_ptr<std::vector<std::shared_ptr<asio::streambuf>>> data, std::function<void(void)> pfn = nullptr) -> void
 	{
-		io_service_.post(std::bind(&RawTCPConnection<SocketType>::__SendV, this->shared_from_this(), datas, pfn));
+		io_service_.post(std::bind(&RawTCPConnection<SocketType>::__SendV, this->shared_from_this(), data, pfn));
 	}
 
 	auto Close() -> void
@@ -132,15 +133,16 @@ protected:
 		outgoing_queue_.push_back(std::make_pair(data, pfn));
 		__DoSend();
 	}
-	auto __SendV(std::vector<std::shared_ptr<asio::streambuf>> datas, std::function<void(void)> pfn) -> void
+
+	auto __SendV(std::shared_ptr<std::vector<std::shared_ptr<asio::streambuf>>> datas, std::function<void(void)> pfn) -> void
 	{
 		// push the real data
-		for (size_t i=0, count = datas.size();i<count;i++)
+		for (size_t i=0, count = datas->size();i<count;i++)
 		{
 			if (i + 1 == count)
-				outgoing_queue_.push_back(std::make_pair(datas[i], pfn));
+				outgoing_queue_.push_back(std::make_pair(datas->at(i), pfn));
 			else
-				outgoing_queue_.push_back(std::make_pair(datas[i], std::function<void(void)>()));
+				outgoing_queue_.push_back(std::make_pair(datas->at(i), std::function<void(void)>()));
 		}
 		__DoSend();
 	}
@@ -198,7 +200,7 @@ protected:
 		if (blocking_recv_)
 			return;
 
-		recving_pkt_ = std::make_shared<asio::streambuf>();
+		recving_pkt_ = on_allocbuf();
 		socket_->async_read_some(recving_pkt_->prepare(recv_buf_length_),
 			std::bind(&RawTCPConnection<SocketType>::__OnRecvCallback, this->shared_from_this(),
 			std::placeholders::_1,

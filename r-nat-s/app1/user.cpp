@@ -12,7 +12,7 @@ void AppLogic1::__OnUserConnect(Service_ptr service, uint32_t seq, asio::ip::tcp
 		return; // no available agent
 
 	auto cli_index = seq;
-	if (load_policy_ == POLICY_IP)
+	if (load_policy_ == Config::CONFIG_LOAD_POLICY_IP)
 	{
 		cli_index = fnv_hash_int(ep.address().to_v4().to_ulong());
 	}
@@ -30,7 +30,7 @@ void AppLogic1::__OnUserConnect(Service_ptr service, uint32_t seq, asio::ip::tcp
 	service->sessions_[seq] = session;
 	agent->sessions_[seq] = session;
 
-	auto rep_buf = std::make_shared<asio::streambuf>();
+	auto rep_buf = __CreateIoBuffer();
 	auto rep = (R_NAT::R2A::connect*)asio::buffer_cast<char*>(rep_buf->prepare(sizeof(R_NAT::R2A::connect)));
 	rep->cmd = R_NAT::R2A::CONNECT;
 	rep->port = service->port_;
@@ -67,7 +67,7 @@ void AppLogic1::__OnUserDisconnect(Service_ptr service, uint32_t seq, const asio
 		auto agent = agent_iter->second;
 		agent->sessions_.erase(seq);
 
-		auto rep_buf = std::make_shared<asio::streambuf>();
+		auto rep_buf = __CreateIoBuffer();
 		auto rep = (R_NAT::R2A::disconnect*)asio::buffer_cast<char*>(rep_buf->prepare(sizeof(R_NAT::R2A::disconnect)));
 		rep->cmd = R_NAT::R2A::DISCONNECT;
 		rep->port = service->port_;
@@ -98,7 +98,7 @@ void AppLogic1::__OnUserRecv(Service_ptr service, uint32_t seq, std::shared_ptr<
 		return;
 	//	auto agent = agent_iter->second;
 
-	auto rep_buf = std::make_shared<asio::streambuf>();
+	auto rep_buf = __CreateIoBuffer();
 	auto rep = (R_NAT::R2A::data*)asio::buffer_cast<char*>(rep_buf->prepare(sizeof(R_NAT::R2A::data)));
 	rep->cmd = R_NAT::R2A::DATA;
 	rep->port = service->port_;
@@ -106,21 +106,25 @@ void AppLogic1::__OnUserRecv(Service_ptr service, uint32_t seq, std::shared_ptr<
 	rep_buf->commit(sizeof(R_NAT::R2A::data));
 
 	session->user_traffic_++;
-	if (QUEUE_LIMIT &&
+	auto queue_limit = queue_limit_;
+	if (queue_limit &&
 		(!session->user_corked_) &&
-		session->user_traffic_ > QUEUE_LIMIT)
+		session->user_traffic_ > queue_limit)
 	{
 		// we have receive too many from relay
 		session->user_corked_ = true;
 		service->service_tcpserver_->BlockRecv(seq,true);
 	}
 
-	std::vector<std::shared_ptr<asio::streambuf>> datas{ rep_buf, buf };
-	agent_tcpserver_->SendV(session->agent_id_, datas, [service, session, seq]{
+	auto datas = std::make_shared<std::vector<std::shared_ptr<asio::streambuf>>>();
+	datas->push_back(rep_buf);
+	datas->push_back(buf);
+
+	agent_tcpserver_->SendV(session->agent_id_, datas, [service, session, seq, queue_limit]{
 		session->user_traffic_--;
-		if (QUEUE_LIMIT &&
+		if (queue_limit &&
 			(session->user_corked_) &&
-			session->tunnel_traffic_ <= QUEUE_LIMIT / 2)
+			session->tunnel_traffic_ <= queue_limit / 2)
 		{
 			session->user_corked_ = false;
 			service->service_tcpserver_->BlockRecv(seq, false);

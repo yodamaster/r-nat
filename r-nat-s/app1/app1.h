@@ -12,6 +12,7 @@ class Server;
 class AppLogic1
 {
 	Server* server_;
+	asio::strand strand_;
 public:
 	AppLogic1(Server* server);
 	~AppLogic1();
@@ -21,11 +22,17 @@ public:
 	void Stop();
 
 protected:
+	// buffer pool
+	bool enable_buffer_pooling_{ true };
+	std::deque<asio::streambuf*> buffer_pool_;
+	std::mutex buff_pool_lock_;
+
 	// config
+	uint32_t queue_limit_;
+	uint32_t load_policy_;
 	std::vector<asio::ip::tcp::endpoint> listenep_;
 
 	// running info
-	// traffic control
 	struct Session 
 	{
 		uint32_t agent_id_{0};
@@ -55,14 +62,9 @@ protected:
 	};
 	std::map<uint32_t,std::shared_ptr<AgentInfo>> agents_; // seq to agent
 
-	enum
-	{
-		POLICY_IP = 0,
-		POLICY_SEQ = 1
-	};
-	int load_policy_ = POLICY_IP;
-
 	std::shared_ptr<TcpServer> agent_tcpserver_; // for agent
+
+	auto __CreateIoBuffer()->std::shared_ptr<asio::streambuf>;
 
 	// listen service(from agent)
 	void __OnAgentConnect(uint32_t seq, asio::ip::tcp::endpoint ep);

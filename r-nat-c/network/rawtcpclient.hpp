@@ -34,7 +34,7 @@ public:
 
 	auto Start(asio::ip::tcp::endpoint ep) -> void
 	{
-		sending_pkt_ = std::make_shared<asio::streambuf>();
+		sending_pkt_ = on_allocbuf();
 		
 		// create timer first because async_connect may happen quickly
 		timer_ = std::make_shared<asio::steady_timer>(io_service_, std::chrono::seconds(connect_timeout_));
@@ -87,6 +87,7 @@ class RawTcpClient
 	: public std::enable_shared_from_this<RawTcpClient>
 {
 public:
+	std::function<std::shared_ptr<asio::streambuf>(void)> on_allocbuf;
 	std::function<void()> on_connect;
 	std::function<void(const asio::error_code& e)> on_disconnect;
 	std::function<void(std::shared_ptr<asio::streambuf> /*buf*/)> on_recv;
@@ -103,9 +104,9 @@ public:
 	{
 		impl_->Send(data, pfn);
 	}
-	auto SendV(std::vector<std::shared_ptr<asio::streambuf>> datas, std::function<void(void)> pfn = nullptr) -> void
+	auto SendV(std::shared_ptr<std::vector<std::shared_ptr<asio::streambuf>>> data, std::function<void(void)> pfn = nullptr) -> void
 	{
-		impl_->SendV(datas, pfn);
+		impl_->SendV(data, pfn);
 	}
 	auto SetMaxPacketLength(uint32_t l) -> void
 	{

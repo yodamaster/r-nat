@@ -17,9 +17,15 @@ public:
 	{
 		main_ioservice_.post(std::bind(&Server::__Stop, this));
 	}
+	asio::io_service& GetIoService()
+	{
+		auto next = next_ioservice_++;
+		return *(ioservices_[next % ioservices_.size()]);
+	}
 
 protected:
 	asio::io_service& main_ioservice_;
+	size_t next_ioservice_{ 0 };
 	std::vector<std::shared_ptr<asio::io_service>> ioservices_;
 
 	friend class AppLogic1;

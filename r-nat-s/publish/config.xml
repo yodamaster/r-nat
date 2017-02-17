@@ -4,14 +4,16 @@
   <local>
     <node address="0.0.0.0" port="443"/>
   </local>
-  <!-- 
-  	support multi address, can be either domain or ip
-  	loadpolicy can be ip or seq, default is ip
-  -->
-  <remote loadpolicy="ip">
-  </remote>
 <!--
 set recv_buf carefully, the memory usage = users * recv_buf
+recv_buf should be smaller than max_packet_size
+according test: recv_buff_size = 4096 is fastest, queue_limit = 1 is enough
 -->
-<packet max="112640" recv_buf_size="65536"/>
+<system
+load_policy="seq"
+max_packet_size="112640"
+recv_buf_size="4096"
+queue_limit="1"
+tcp_send_no_delay="1"
+tcp_connect_timeout="30"/>
 </config>
