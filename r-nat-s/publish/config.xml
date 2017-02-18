@@ -5,15 +5,16 @@
     <node address="0.0.0.0" port="443"/>
   </local>
 <!--
-set recv_buf carefully, the memory usage = users * recv_buf
-recv_buf should be smaller than max_packet_size
-according test: recv_buff_size = 4096 is fastest, queue_limit = 1 is enough
+recv_buf: should be smaller than max_packet_size, no need to be larger than 64K
+packet_defragment: re-assemble packet for less packets
+tcp_send_no_delay: control tcp:nolay
 -->
 <system
 load_policy="seq"
-max_packet_size="112640"
+max_packet_size="11264000"
 recv_buf_size="4096"
-queue_limit="1"
+queue_limit="10"
 tcp_send_no_delay="1"
-tcp_connect_timeout="30"/>
+tcp_connect_timeout="30"
+packet_defragment="1"/>
 </config>

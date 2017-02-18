@@ -53,10 +53,11 @@ void AppLogic1::Start()
 	agent_tcpserver_->SetMaxPacketLength(getConfig()->system_.max_packet_size_);
 	agent_tcpserver_->SetNoDelay(getConfig()->system_.tcp_send_no_delay_);
 	agent_tcpserver_->SetRecvbufSize(getConfig()->system_.recv_buf_size_);
+	agent_tcpserver_->SetDefragment(getConfig()->system_.packet_defragment_);
 	agent_tcpserver_->on_allocbuf = std::bind(&AppLogic1::__CreateIoBuffer,this);
-	agent_tcpserver_->on_recv = strand_.wrap(std::bind(&AppLogic1::__OnAgentRecv, this, _1, _2));
 	agent_tcpserver_->on_connect = strand_.wrap(std::bind(&AppLogic1::__OnAgentConnect, this, _1, _2));
 	agent_tcpserver_->on_disconnect = strand_.wrap(std::bind(&AppLogic1::__OnAgentDisconnect, this, _1, _2));
+	agent_tcpserver_->on_recv = strand_.wrap(std::bind(&AppLogic1::__OnAgentRecv, this, _1, _2));
 
 	agent_tcpserver_->Start(listenep_);
 }
@@ -98,4 +99,27 @@ auto AppLogic1::__CreateIoBuffer()->std::shared_ptr<asio::streambuf>
 			delete p;
 		}
 	});
+}
+
+void AppLogic1::__CleanSession(Service_ptr service, Session_ptr session)
+{
+	if (session->user_disconnected_ &&
+		session->tunnel_disconnected_)
+	{
+		LOG_DEBUG("close actively due to user_conn %d, session_conn %d(hard %d)",
+			session->user_disconnected_,
+			session->tunnel_disconnected_,
+			session->tunnel_hard_disconnected_);
+
+		service->sessions_.erase(session->seq_); // remove from service session list
+		service->service_tcpserver_->Close(session->seq_); // remove the connection
+
+		// find the agent
+		auto agent_iter = agents_.find(session->agent_id_);
+		if (agent_iter != agents_.end())
+		{
+			auto agent = agent_iter->second;
+			agent->sessions_.erase(session->seq_); // remove from agent session list
+		}
+	}
 }

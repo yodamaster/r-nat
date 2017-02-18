@@ -30,14 +30,15 @@ protected:
 
 	char packet_header_[PACKET_HEADER_LENGTH];
 	uint32_t max_packet_length_{ 0 };
-	bool nodelay_{ false };
+	int nodelay_{ false };
+	int defragment_{ false };
 	size_t recv_buf_length_{ DEFAULT_BUFFER_LENGTH };
 	bool blocking_recv_{ false };
 
 public:
-	std::function<std::shared_ptr<asio::streambuf>(void)> on_allocbuf;
-	std::function<void(const asio::error_code& e)> on_disconnect;
-	std::function<void(std::shared_ptr<asio::streambuf> /*buf*/)> on_recv;
+	std::function<std::shared_ptr<asio::streambuf>(void)> on_allocbuf = nullptr;
+	std::function<void(const asio::error_code& e)> on_disconnect = nullptr;
+	std::function<void(std::shared_ptr<asio::streambuf> /*buf*/)> on_recv = nullptr;
 
 public:
 	TCPConnection(asio::io_service& ioservice, std::shared_ptr<SocketType> socket)
@@ -67,6 +68,7 @@ public:
 
 	auto Close() -> void
 	{
+		on_allocbuf = nullptr;
 		on_recv = nullptr;
 		on_disconnect = nullptr;
 
@@ -85,7 +87,7 @@ public:
 		max_packet_length_ = l;
 	}
 
-	auto SetNoDelay(bool nodelay) -> void
+	auto SetNoDelay(int nodelay) -> void
 	{
 		nodelay_ = nodelay;
 	}
@@ -96,6 +98,11 @@ public:
 			recv_buf_length_ = l;
 		else
 			recv_buf_length_ = DEFAULT_BUFFER_LENGTH;
+	}
+
+	auto SetDefragment(int defragment) -> void
+	{
+		defragment_ = defragment;
 	}
 
 	auto BlockRecv(bool b) -> void
@@ -131,14 +138,34 @@ protected:
 	}
 	auto __Send(std::shared_ptr<asio::streambuf> data, std::function<void(void)> pfn) -> void
 	{
-		// fill the packet length
-		auto buf_header = on_allocbuf();
-		*(asio::buffer_cast<uint32_t*>(buf_header->prepare(PACKET_HEADER_LENGTH))) = (uint32_t)data->size();
-		buf_header->commit(sizeof(uint32_t));
-		outgoing_queue_.push_back(std::make_pair(buf_header, std::function<void(void)>()));
+		if (!on_allocbuf)
+			return;
 
-		// push the real data
-		outgoing_queue_.push_back(std::make_pair(data, pfn));
+		if (!defragment_)
+		{
+			// fill the packet length
+			auto buf_header = on_allocbuf();
+			*(asio::buffer_cast<uint32_t*>(buf_header->prepare(PACKET_HEADER_LENGTH))) = (uint32_t)data->size();
+			buf_header->commit(sizeof(uint32_t));
+			outgoing_queue_.push_back(std::make_pair(buf_header, std::function<void(void)>()));
+
+			// push the real data
+			outgoing_queue_.push_back(std::make_pair(data, pfn));
+		}
+		else
+		{
+			// generate new packet
+			auto new_buf = on_allocbuf();
+			*(asio::buffer_cast<uint32_t*>(new_buf->prepare(PACKET_HEADER_LENGTH))) = (uint32_t)data->size();
+			new_buf->commit(sizeof(uint32_t));
+
+			asio::buffer_copy(new_buf->prepare(data->size()), data->data());
+			new_buf->commit(data->size());
+
+			// push into the queue
+			outgoing_queue_.push_back(std::make_pair(new_buf, pfn));
+		}
+
 		__DoSend();
 	}
 
@@ -149,19 +176,38 @@ protected:
 		{
 			l += data->size();
 		}
-		// fill the packet length
-		auto buf_header = on_allocbuf();
-		*(asio::buffer_cast<uint32_t*>(buf_header->prepare(PACKET_HEADER_LENGTH))) = (uint32_t)l;
-		buf_header->commit(sizeof(uint32_t));
-		outgoing_queue_.push_back(std::make_pair(buf_header, std::function<void(void)>()));
-
-		// push the real data
-		for (size_t i=0, count = datas->size();i<count;i++)
+		if (!defragment_)
 		{
-			if (i + 1 == count)
-				outgoing_queue_.push_back(std::make_pair(datas->at(i), pfn));
-			else
-				outgoing_queue_.push_back(std::make_pair(datas->at(i), std::function<void(void)>()));
+			// fill the packet length
+			auto buf_header = on_allocbuf();
+			*(asio::buffer_cast<uint32_t*>(buf_header->prepare(PACKET_HEADER_LENGTH))) = (uint32_t)l;
+			buf_header->commit(sizeof(uint32_t));
+			outgoing_queue_.push_back(std::make_pair(buf_header, std::function<void(void)>()));
+
+			// push the real data
+			for (size_t i = 0, count = datas->size(); i < count; i++)
+			{
+				if (i + 1 == count)
+					outgoing_queue_.push_back(std::make_pair(datas->at(i), pfn));
+				else
+					outgoing_queue_.push_back(std::make_pair(datas->at(i), std::function<void(void)>()));
+			}
+		}
+		else
+		{
+			// generate new packet
+			auto new_buf = on_allocbuf();
+			*(asio::buffer_cast<uint32_t*>(new_buf->prepare(PACKET_HEADER_LENGTH))) = (uint32_t)l;
+			new_buf->commit(sizeof(uint32_t));
+
+			for (auto&& d: *datas)
+			{
+				asio::buffer_copy(new_buf->prepare(d->size()), d->data());
+				new_buf->commit(d->size());
+			}
+
+			// push into the queue
+			outgoing_queue_.push_back(std::make_pair(new_buf, pfn));
 		}
 		__DoSend();
 	}

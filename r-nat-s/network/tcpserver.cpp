@@ -41,6 +41,7 @@ auto TcpServer::__StartNextConnection(std::shared_ptr<asio::ip::tcp::acceptor> a
 	conn->SetMaxPacketLength(max_packet_length_);
 	conn->SetNoDelay(nodelay_);
 	conn->SetRecvbufSize(recv_buf_length_);
+	conn->SetDefragment(defragment_);
 	conn->on_allocbuf = [this]
 	{
 		if (on_allocbuf)

@@ -1,0 +1,4 @@
+1. copy generated r-nat-s, config.xml to /opt/r-nat
+2. copy r-nat.service to /etc/systemd/system/
+3. config iptables, allow anyone to connect to 443, allow restricted ip to all tcp ports
+4. enable service,start service

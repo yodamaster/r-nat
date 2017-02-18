@@ -35,19 +35,22 @@ protected:
 	// running info
 	struct Session 
 	{
+		uint32_t seq_{ 0 };
 		uint32_t agent_id_{0};
 		bool using_session_conn_{ false };
 		std::atomic<uint32_t> user_traffic_{ 0 };
 		std::atomic<uint32_t> tunnel_traffic_{ 0 };
 		bool user_corked_{ false };
 		bool tunnel_corked_{ false };
-		int delete_pending_{ 0 }; // TODO: to support
+		bool user_disconnected_{ false };
+		bool tunnel_disconnected_{ false };
+		bool tunnel_hard_disconnected_{ false };
 	};
 	typedef std::shared_ptr<Session> Session_ptr;
 
 	struct ServiceInfo
 	{
-		uint32_t port_;
+		uint16_t port_;
 		std::shared_ptr<RawTcpServer> service_tcpserver_; // in charge of individual service
 		std::set<uint32_t> agents_;
 
@@ -57,10 +60,12 @@ protected:
 	std::map<uint16_t, Service_ptr> services_; // port to listen service
 	struct AgentInfo
 	{
+		uint32_t seq_;
 		std::set<uint16_t> ports_; // port
 		std::map<uint32_t, Session_ptr> sessions_;
 	};
-	std::map<uint32_t,std::shared_ptr<AgentInfo>> agents_; // seq to agent
+	typedef std::shared_ptr<AgentInfo> AgentInfo_ptr;
+	std::map<uint32_t, AgentInfo_ptr> agents_; // seq to agent
 
 	std::shared_ptr<TcpServer> agent_tcpserver_; // for agent
 
@@ -75,4 +80,7 @@ protected:
 	void __OnUserConnect(Service_ptr service, uint32_t seq, asio::ip::tcp::endpoint ep);
 	void __OnUserDisconnect(Service_ptr service, uint32_t seq, const asio::error_code& e);
 	void __OnUserRecv(Service_ptr service, uint32_t seq, std::shared_ptr<asio::streambuf> buf);
+
+	// cleanup
+	void __CleanSession(Service_ptr service, Session_ptr session);
 };

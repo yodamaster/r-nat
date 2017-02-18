@@ -104,6 +104,7 @@ auto AppLogic1::__CreateTcpClient()->TcpClient_ptr
 	tcpclient->SetNoDelay(getConfig()->system_.tcp_send_no_delay_);
 	tcpclient->SetRecvbufSize(getConfig()->system_.recv_buf_size_);
 	tcpclient->SetConnectTimeout(getConfig()->system_.tcp_connect_timeout_);
+	tcpclient->SetDefragment(getConfig()->system_.packet_defragment_);
 	tcpclient->on_allocbuf = std::bind(&AppLogic1::__CreateIoBuffer, this);
 	return tcpclient;
 }
@@ -171,4 +172,19 @@ auto AppLogic1::__CreateIoBuffer()->std::shared_ptr<asio::streambuf>
 			delete p;
 		}
 	});
+}
+
+void AppLogic1::__CleanSession(RemoteInfo_ptr remoteinfo, Session_ptr session, User usr)
+{
+	if (session->user_disconnected_ &&
+		session->tunnel_disconnected_)
+	{
+		LOG_DEBUG("close actively due to user_conn %d, session_conn %d(hard %d)", 
+			session->user_disconnected_, 
+			session->tunnel_disconnected_,
+			session->tunnel_hard_disconnected_);
+		session->user_conn_->Close();
+		session->session_conn_->Close();
+		remoteinfo->users_.erase(usr);
+	}
 }

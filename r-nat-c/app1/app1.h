@@ -45,7 +45,9 @@ protected:
 		std::atomic<uint32_t> tunnel_traffic_{ 0 };
 		bool user_corked_{ false };
 		bool tunnel_corked_{ false };
-		int delete_pending_{ 0 };
+		bool user_disconnected_{ false };
+		bool tunnel_disconnected_{ false };
+		bool tunnel_hard_disconnected_{ false };
 	};
 	typedef std::shared_ptr<Session> Session_ptr;
 	struct RemoteInfo 
@@ -78,4 +80,7 @@ protected:
 	void __OnUserConnect(RemoteInfo_ptr remoteinfo, Session_ptr session, User usr, const asio::ip::tcp::endpoint& ep);
 	void __OnUserDisconnect(const asio::error_code& e, RemoteInfo_ptr remoteinfo, Session_ptr session, User usr, const asio::ip::tcp::endpoint& ep);
 	void __OnUserRecv(std::shared_ptr<asio::streambuf> data, RemoteInfo_ptr remoteinfo, Session_ptr session, User usr);
+
+	// clean
+	void __CleanSession(RemoteInfo_ptr remoteinfo, Session_ptr session, User usr);
 };

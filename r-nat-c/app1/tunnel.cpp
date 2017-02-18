@@ -101,7 +101,7 @@ void AppLogic1::__OnServerRecv(std::shared_ptr<asio::streambuf> data, RemoteInfo
 			(!session->tunnel_corked_) &&
 			session->tunnel_traffic_ > queue_limit_)
 		{
-			// we have receive too many from relay
+			// we have received too much from relay
 			session->tunnel_corked_ = true;
 			session->session_conn_->BlockRecv(true);
 		}
@@ -116,13 +116,8 @@ void AppLogic1::__OnServerRecv(std::shared_ptr<asio::streambuf> data, RemoteInfo
 				session->tunnel_corked_ = false;
 				session->session_conn_->BlockRecv(false);
 			}
-			if (session->tunnel_traffic_ ==0 &&
-				session->delete_pending_)
-			{
-//				std::cout << "no more pending data, inside usr conn" << std::endl;
-				session->user_conn_->Close();
-				remoteinfo->users_.erase(usr);
-			}
+
+			__CleanSession(remoteinfo, session, usr);
 		});
 		break;
 	}
@@ -186,10 +181,9 @@ void AppLogic1::__OnServerRecv(std::shared_ptr<asio::streambuf> data, RemoteInfo
 		// close socket
 		auto session = user_iter->second;
 		session->session_conn_->Close();
-		session->user_conn_->Close();
+		session->tunnel_disconnected_ = true;
 
-		// remove the user
-		remoteinfo->users_.erase(user_iter);
+		__CleanSession(remoteinfo, session, usr);
 		break;
 	}
 	}

@@ -10,7 +10,7 @@ protected:
 	std::shared_ptr<asio::steady_timer> timer_;
 
 public:
-	std::function<void()> on_connect;
+	std::function<void()> on_connect = nullptr;
 
 	enum
 	{
@@ -87,10 +87,10 @@ class RawTcpClient
 	: public std::enable_shared_from_this<RawTcpClient>
 {
 public:
-	std::function<std::shared_ptr<asio::streambuf>(void)> on_allocbuf;
-	std::function<void()> on_connect;
-	std::function<void(const asio::error_code& e)> on_disconnect;
-	std::function<void(std::shared_ptr<asio::streambuf> /*buf*/)> on_recv;
+	std::function<std::shared_ptr<asio::streambuf>(void)> on_allocbuf = nullptr;
+	std::function<void()> on_connect = nullptr;
+	std::function<void(const asio::error_code& e)> on_disconnect = nullptr;
+	std::function<void(std::shared_ptr<asio::streambuf> /*buf*/)> on_recv = nullptr;
 
 public:
 	RawTcpClient(asio::io_service& io_service) : io_service_(io_service){}
@@ -114,7 +114,7 @@ public:
 		if (impl_)
 			impl_->SetMaxPacketLength(l);
 	}
-	auto SetNoDelay(bool nodelay) -> void
+	auto SetNoDelay(int nodelay) -> void
 	{
 		nodelay_ = nodelay;
 		if (impl_)
@@ -157,7 +157,7 @@ protected:
 	uint32_t max_packet_length_{ 0 };// 0 = default, using setting from base class
 	size_t recv_buf_length_{ 0 }; // 0 = default, using setting from base class
 	uint32_t connect_timeout_{ 0 };// 0 = default, using setting from base class
-	bool nodelay_{ false };
+	int nodelay_{ 0 };
 };
 
 typedef std::shared_ptr<RawTcpClient> RawTcpClient_ptr;

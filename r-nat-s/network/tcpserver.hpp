@@ -35,10 +35,10 @@ class TcpServer
 	: public std::enable_shared_from_this<TcpServer>
 {
 public:
-	std::function<std::shared_ptr<asio::streambuf>(void)> on_allocbuf;
-	std::function<void(uint32_t /*seq*/, asio::ip::tcp::endpoint /*ep*/)> on_connect;
-	std::function<void(uint32_t /*seq*/, const asio::error_code&)> on_disconnect;
-	std::function<void(uint32_t /*seq*/, std::shared_ptr<asio::streambuf> /*buf*/)> on_recv;
+	std::function<std::shared_ptr<asio::streambuf>(void)> on_allocbuf = nullptr;
+	std::function<void(uint32_t /*seq*/, asio::ip::tcp::endpoint /*ep*/)> on_connect = nullptr;
+	std::function<void(uint32_t /*seq*/, const asio::error_code&)> on_disconnect = nullptr;
+	std::function<void(uint32_t /*seq*/, std::shared_ptr<asio::streambuf> /*buf*/)> on_recv = nullptr;
 
 public:
 	TcpServer(asio::io_service& io_service, std::vector<std::shared_ptr<asio::io_service>> ioservices)
@@ -51,7 +51,7 @@ public:
 	{
 		max_packet_length_ = l;
 	}
-	auto SetNoDelay(bool nodelay) -> void
+	auto SetNoDelay(int nodelay) -> void
 	{
 		nodelay_ = nodelay;
 	}
@@ -59,6 +59,11 @@ public:
 	auto SetRecvbufSize(size_t l) -> void
 	{
 		recv_buf_length_ = l;
+	}
+
+	auto SetDefragment(int defragment) -> void
+	{
+		defragment_ = defragment;
 	}
 
 	auto Start(asio::ip::tcp::endpoint ep) -> bool
@@ -98,7 +103,8 @@ protected:
 	std::vector<std::shared_ptr<asio::io_service>> ioservices_;
 	uint32_t max_packet_length_{ 0 }; // 0 means default
 	size_t recv_buf_length_{ 0 }; // 0 means default
-	bool nodelay_{ false };
+	int nodelay_{ 0 };
+	int defragment_{ 0 };
 
 	uint16_t port_{ 0 }; // the first listen port
 

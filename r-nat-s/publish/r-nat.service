@@ -1,0 +1,9 @@
+[Unit]
+Description=r-nat
+After=network.target network-online.target rsyslog.service
+
+[Service]
+ExecStart=/opt/r-nat/r-nat-s /opt/r-nat/config.xml
+
+[Install]
+WantedBy=multi-user.target

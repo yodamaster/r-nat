@@ -8,6 +8,7 @@
 void AppLogic1::__OnAgentConnect(uint32_t seq, asio::ip::tcp::endpoint ep)
 {
 	auto agent = std::make_shared<AgentInfo>();
+	agent->seq_ = seq;
 	agents_[seq] = agent;
 	LOG_DEBUG("new agent %d",seq);
 }
@@ -31,7 +32,12 @@ void AppLogic1::__OnAgentDisconnect(uint32_t seq, const asio::error_code& e)
 
 			for (auto ses_in_agent_iter : agent->sessions_)
 			{
-				service->service_tcpserver_->Close(ses_in_agent_iter.first);
+// 				auto user_seq = ses_in_agent_iter.first;
+				auto session = ses_in_agent_iter.second;
+				session->tunnel_disconnected_ = true;
+				session->tunnel_hard_disconnected_ = true;
+
+				__CleanSession(service, session);
 			}
 
 			service->agents_.erase(seq);
@@ -219,7 +225,7 @@ void AppLogic1::__OnAgentRecv(uint32_t seq, std::shared_ptr<asio::streambuf> dat
 				LOG_DEBUG("stop recv from agent %d due to longer queue size", seq, session->tunnel_traffic_);
 			}
 
-			service->service_tcpserver_->Send(user_id, data, [this, session, seq, queue_limit]{
+			service->service_tcpserver_->Send(user_id, data, [this, service, session, seq, queue_limit]{
 				session->tunnel_traffic_--;
 				if (queue_limit &&
 					(session->tunnel_corked_) &&
@@ -229,6 +235,7 @@ void AppLogic1::__OnAgentRecv(uint32_t seq, std::shared_ptr<asio::streambuf> dat
 					agent_tcpserver_->BlockRecv(seq, false);
 					LOG_DEBUG("resume recv from agent %d", seq, session->tunnel_traffic_);
 				}
+				__CleanSession(service, session);
 			});
 		}
 		break;
@@ -239,25 +246,19 @@ void AppLogic1::__OnAgentRecv(uint32_t seq, std::shared_ptr<asio::streambuf> dat
 		if (data->size() < sizeof(R_NAT::A2R::disconnect))
 			break;
 		auto req = reinterpret_cast<R_NAT::A2R::disconnect*>(p);
-		// find the agent
-		auto agent_iter = agents_.find(seq);
-		if (agent_iter == agents_.end())
-			break;
-		auto agent = agent_iter->second;
-		agent->sessions_.erase(req->id);
-
 		// find the service
 		auto service_iter = services_.find(req->port);
 		if (service_iter != services_.end())
 		{
 			auto service = service_iter->second;
 
-			// close the client connection
-			service->service_tcpserver_->Close(req->id);
-
-			service->sessions_.erase(req->id);
-
-			LOG_DEBUG("the agent %d has been disconnected from final server, remote the user %d", seq, req->id);
+			auto ses_inter = service->sessions_.find(req->id);
+			if (ses_inter != service->sessions_.end())
+			{
+				auto session = ses_inter->second;
+				session->tunnel_disconnected_ = true;
+				__CleanSession(service, session);
+			}
 		}
 		break;
 	}

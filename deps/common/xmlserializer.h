@@ -403,7 +403,8 @@ bool XMLSerializer::FromFile(std::string file)
 	}
 	fseek(f,0,SEEK_SET); 
 	char* buf=xml_->allocate_string(0,nLen+1);
-	fread(buf,1,nLen,f); 
+	int ret = fread(buf,1,nLen,f); 
+	ret;
 	fclose(f); 
 	buf[nLen]=0; 
 	try

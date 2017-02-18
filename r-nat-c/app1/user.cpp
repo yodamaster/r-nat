@@ -20,22 +20,20 @@ void AppLogic1::__OnUserDisconnect(const asio::error_code& e, RemoteInfo_ptr rem
 	std::cout << "\tdisconnected, service port: " << usr.first << ", user seq: " << usr.second << std::endl;
 
 	session->user_conn_->Close();
+	session->user_disconnected_ = true;
 
-	if (session->user_traffic_ &&
-		session->tunnel_traffic_ == 0 &&
-		session->delete_pending_ ==0)
-	{
-		// we still have data from proxy to relay
-		session->delete_pending_++;
-//		std::cout << "enter delay delete, usr conn broken" << std::endl;
-	}
-	else
-	{
-		// either still have data to relay
-		// or, no more data from relay
-		session->session_conn_->Close();
-		remoteinfo->users_.erase(usr);
-	}
+	auto rep_buf = __CreateIoBuffer();
+	using MSG = R_NAT::A2R::disconnect;
+	auto rep = (MSG*)asio::buffer_cast<char*>(rep_buf->prepare(sizeof(MSG)));
+	rep->cmd = R_NAT::A2R::DISCONNECT;
+	rep->port = usr.first;
+	rep->id = usr.second;
+	rep_buf->commit(sizeof(MSG));
+
+	auto tcpclient = session->session_conn_ready_ ? session->session_conn_ : remoteinfo->tcpclient_;
+	tcpclient->Send(rep_buf);
+
+	__CleanSession(remoteinfo, session, usr);
 }
 
 void AppLogic1::__OnUserRecv(std::shared_ptr<asio::streambuf> data, RemoteInfo_ptr remoteinfo, Session_ptr session, User usr)
@@ -73,12 +71,6 @@ void AppLogic1::__OnUserRecv(std::shared_ptr<asio::streambuf> data, RemoteInfo_p
 			session->user_corked_ = false;
 			session->user_conn_->BlockRecv(false);
 		}
-		if (session->user_traffic_ == 0 &&
-			session->delete_pending_)
-		{
-//			std::cout << "no more pending task, inside session conn" << std::endl;
-			session->session_conn_->Close();
-			remoteinfo->users_.erase(usr);
-		}
+		__CleanSession(remoteinfo,session,usr);
 	});
 }

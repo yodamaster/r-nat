@@ -9,7 +9,10 @@ void AppLogic1::__OnUserConnect(Service_ptr service, uint32_t seq, asio::ip::tcp
 {
 	LOG_FUNCTION();
 	if (service->agents_.size() == 0)
+	{
+		service->service_tcpserver_->Close(seq); // remove the connection
 		return; // no available agent
+	}
 
 	auto cli_index = seq;
 	if (load_policy_ == Config::CONFIG_LOAD_POLICY_IP)
@@ -26,6 +29,7 @@ void AppLogic1::__OnUserConnect(Service_ptr service, uint32_t seq, asio::ip::tcp
 	auto agent = agent_iter->second;
 
 	auto session = std::make_shared<Session>();
+	session->seq_ = seq;
 	session->agent_id_ = agent_seq;
 	service->sessions_[seq] = session;
 	agent->sessions_[seq] = session;
@@ -44,46 +48,6 @@ void AppLogic1::__OnUserConnect(Service_ptr service, uint32_t seq, asio::ip::tcp
 void AppLogic1::__OnUserDisconnect(Service_ptr service, uint32_t seq, const asio::error_code& e)
 {
 	LOG_FUNCTION();
-	do 
-	{
-		if (service->agents_.size() == 0)
-		{
-			break; // no available agent
-		}
-
-		auto session_iter = service->sessions_.find(seq);
-		if (session_iter == service->sessions_.end())
-		{
-			break;
-		}
-
-		auto session = session_iter->second;
-
-		auto agent_iter = agents_.find(session->agent_id_);
-		if (agent_iter == agents_.end())
-		{
-			break;
-		}
-		auto agent = agent_iter->second;
-		agent->sessions_.erase(seq);
-
-		auto rep_buf = __CreateIoBuffer();
-		auto rep = (R_NAT::R2A::disconnect*)asio::buffer_cast<char*>(rep_buf->prepare(sizeof(R_NAT::R2A::disconnect)));
-		rep->cmd = R_NAT::R2A::DISCONNECT;
-		rep->port = service->port_;
-		rep->id = seq;
-		rep_buf->commit(sizeof(R_NAT::R2A::disconnect));
-		agent_tcpserver_->Send(session->agent_id_, rep_buf);
-	} while (0);
-	service->sessions_.erase(seq); // remove mapping: user <--> agent
-	service->service_tcpserver_->Close(seq); // remove the connection
-}
-
-void AppLogic1::__OnUserRecv(Service_ptr service, uint32_t seq, std::shared_ptr<asio::streambuf> buf)
-{
-	LOG_FUNCTION();
-	if (service->agents_.size() == 0)
-		return; // no available agent
 
 	auto session_iter = service->sessions_.find(seq);
 	if (session_iter == service->sessions_.end())
@@ -92,11 +56,32 @@ void AppLogic1::__OnUserRecv(Service_ptr service, uint32_t seq, std::shared_ptr<
 	}
 
 	auto session = session_iter->second;
+	session->user_disconnected_ = true;
 
-	auto agent_iter = agents_.find(session->agent_id_);
-	if (agent_iter == agents_.end())
+	if (!session->tunnel_hard_disconnected_)
+	{
+		auto rep_buf = __CreateIoBuffer();
+		auto rep = (R_NAT::R2A::disconnect*)asio::buffer_cast<char*>(rep_buf->prepare(sizeof(R_NAT::R2A::disconnect)));
+		rep->cmd = R_NAT::R2A::DISCONNECT;
+		rep->port = service->port_;
+		rep->id = seq;
+		rep_buf->commit(sizeof(R_NAT::R2A::disconnect));
+		agent_tcpserver_->Send(session->agent_id_, rep_buf);
+	}
+
+	__CleanSession(service, session);
+}
+
+void AppLogic1::__OnUserRecv(Service_ptr service, uint32_t seq, std::shared_ptr<asio::streambuf> buf)
+{
+	LOG_FUNCTION();
+	auto session_iter = service->sessions_.find(seq);
+	if (session_iter == service->sessions_.end())
+	{
 		return;
-	//	auto agent = agent_iter->second;
+	}
+
+	auto session = session_iter->second;
 
 	auto rep_buf = __CreateIoBuffer();
 	auto rep = (R_NAT::R2A::data*)asio::buffer_cast<char*>(rep_buf->prepare(sizeof(R_NAT::R2A::data)));
@@ -120,7 +105,7 @@ void AppLogic1::__OnUserRecv(Service_ptr service, uint32_t seq, std::shared_ptr<
 	datas->push_back(rep_buf);
 	datas->push_back(buf);
 
-	agent_tcpserver_->SendV(session->agent_id_, datas, [service, session, seq, queue_limit]{
+	agent_tcpserver_->SendV(session->agent_id_, datas, [this,service, session, seq, queue_limit]{
 		session->user_traffic_--;
 		if (queue_limit &&
 			(session->user_corked_) &&
@@ -129,5 +114,6 @@ void AppLogic1::__OnUserRecv(Service_ptr service, uint32_t seq, std::shared_ptr<
 			session->user_corked_ = false;
 			service->service_tcpserver_->BlockRecv(seq, false);
 		}
+		__CleanSession(service, session);
 	});
 }

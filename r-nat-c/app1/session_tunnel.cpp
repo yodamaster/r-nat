@@ -24,22 +24,10 @@ void AppLogic1::__OnSessionDisconnect(const asio::error_code& e, RemoteInfo_ptr 
 {
 	// close socket
 	session->session_conn_->Close();
-	if (session->tunnel_traffic_ &&
-		session->user_traffic_ == 0 &&
-		session->delete_pending_ == 0)
-	{
-		// we still have data from relay to proxy
-		session->delete_pending_++;
-//		std::cout << "enter delay delete, session conn broken" << std::endl;
-	}
-	else
-	{
-		// either still have data to relay
-		// or, no more data from relay
-		session->user_conn_->Close();
-		// remove the user
-		remoteinfo->users_.erase(usr);
-	}
+	session->tunnel_disconnected_ = true;
+	session->tunnel_hard_disconnected_ = true;
+
+	__CleanSession(remoteinfo, session, usr);
 }
 
 void AppLogic1::__OnSessionRecv(std::shared_ptr<asio::streambuf> data, RemoteInfo_ptr remoteinfo, Session_ptr session, User usr)
@@ -88,13 +76,8 @@ void AppLogic1::__OnSessionRecv(std::shared_ptr<asio::streambuf> data, RemoteInf
 				session->tunnel_corked_ = false;
 				session->session_conn_->BlockRecv(false);
 			}
-			if (session->tunnel_traffic_ ==0 &&
-				session->delete_pending_)
-			{
-//				std::cout << "no more pending data, inside usr conn" << std::endl;
-				session->user_conn_->Close();
-				remoteinfo->users_.erase(usr);
-			}
+
+			__CleanSession(remoteinfo, session, usr);
 		});
 		break;
 	}
@@ -113,10 +96,9 @@ void AppLogic1::__OnSessionRecv(std::shared_ptr<asio::streambuf> data, RemoteInf
 		// close socket
 		auto session = user_iter->second;
 		session->session_conn_->Close();
-		session->user_conn_->Close();
+		session->tunnel_disconnected_ = true;
 
-		// remove the user
-		remoteinfo->users_.erase(user_iter);
+		__CleanSession(remoteinfo, session, usr);
 		break;
 	}
 	}

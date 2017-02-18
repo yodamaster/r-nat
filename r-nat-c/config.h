@@ -11,6 +11,7 @@ struct AddressInfo
 		address_ = src.address_;
 		port_ = src.port_;
 		service_port_ = src.service_port_;
+		concurrency_ = src.concurrency_;
 		return *this;
 	}
 	AddressInfo(const AddressInfo& src)
@@ -41,9 +42,10 @@ struct Config
 		std::string load_policy_  = "IP"; // can be IP or seq
 		uint32_t recv_buf_size_{ 4096 }; // use page size
 		uint32_t max_packet_size_{ 1024 * 110 };
-		uint32_t queue_limit_{ 1 };
-		uint32_t tcp_send_no_delay_{ 1 };
+		uint32_t queue_limit_{ 10 };
+		int tcp_send_no_delay_{ 1 };
 		uint32_t tcp_connect_timeout_{ 30 };
+		int packet_defragment_{ 1 };
 		XML_CONFIG_BEGIN();
 		XML_CONFIG_ITEM("load_policy", load_policy_);
 		XML_CONFIG_ITEM("max_packet_size", max_packet_size_);
@@ -51,6 +53,7 @@ struct Config
 		XML_CONFIG_ITEM("queue_limit", queue_limit_);
 		XML_CONFIG_ITEM("tcp_send_no_delay", tcp_send_no_delay_);
 		XML_CONFIG_ITEM("tcp_connect_timeout", tcp_connect_timeout_);
+		XML_CONFIG_ITEM("packet_defragment", packet_defragment_);
 		XML_CONFIG_END();
 		auto LoadPolicy() -> int
 		{

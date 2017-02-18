@@ -28,14 +28,14 @@ protected:
 	};
 
 	uint32_t max_packet_length_{ 0 };
-	bool nodelay_{ false };
+	int nodelay_{ 0 };
 	size_t recv_buf_length_{ DEFAULT_BUFFER_LENGTH };
 	bool blocking_recv_{ false };
 
 public:
-	std::function<std::shared_ptr<asio::streambuf>(void)> on_allocbuf;
-	std::function<void(const asio::error_code& e)> on_disconnect;
-	std::function<void(std::shared_ptr<asio::streambuf> /*buf*/)> on_recv;
+	std::function<std::shared_ptr<asio::streambuf>(void)> on_allocbuf = nullptr;
+	std::function<void(const asio::error_code& e)> on_disconnect = nullptr;
+	std::function<void(std::shared_ptr<asio::streambuf> /*buf*/)> on_recv = nullptr;
 
 public:
 	RawTCPConnection(asio::io_service& ioservice, std::shared_ptr<SocketType> socket)
@@ -83,7 +83,7 @@ public:
 		max_packet_length_ = l;
 	}
 
-	auto SetNoDelay(bool nodelay) -> void
+	auto SetNoDelay(int nodelay) -> void
 	{
 		nodelay_ = nodelay;
 	}
